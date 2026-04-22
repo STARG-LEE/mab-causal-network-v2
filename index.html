@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mAb Stability — Causal Relationship Network (v4d, GPT-5-mini)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-panel: #1a2035;
+  --bg-hover: #243049;
+  --border: #2a3550;
+  --text-primary: #e8ecf4;
+  --text-secondary: #8899b4;
+  --text-muted: #556680;
+  --accent: #60a5fa;
+  --increases: #ef4444;
+  --decreases: #3b82f6;
+  --leads-to: #a855f7;
+  --inhibits: #22c55e;
+  --requires: #94a3b8;
+  --associated: #475569;
+  --radius: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+ 
+* { margin: 0; padding: 0; box-sizing: border-box; }
+ 
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+}
+ 
+/* === LAYOUT === */
+.app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+}
+ 
+/* === HEADER === */
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+ 
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+ 
+.header h1 span {
+  color: var(--accent);
+  font-weight: 700;
+}
+ 
+.header-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+ 
+.header-stats .stat-val {
+  color: var(--accent);
+  font-weight: 500;
+}
+ 
+/* === SIDEBAR === */
+.sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+ 
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+ 
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+ 
+.panel-header {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+ 
+.panel-body { padding: 12px 14px; }
+ 
+#relFilters {
+  max-height: 45vh;
+  overflow-y: auto;
+}
+ 
+#relFilters::-webkit-scrollbar { width: 4px; }
+#relFilters::-webkit-scrollbar-track { background: transparent; }
+#relFilters::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+ 
+/* === RELATIONSHIP FILTERS === */
+.rel-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+ 
+.rel-filter:hover { opacity: 0.8; }
+ 
+.rel-filter input[type="checkbox"] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+ 
+.rel-filter input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+ 
+.rel-filter input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: -1px;
+  left: 2px;
+  font-size: 11px;
+  color: var(--bg-primary);
+  font-weight: 700;
+}
+ 
+.rel-color {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+ 
+.rel-label {
+  font-size: 12px;
+  color: var(--text-primary);
+  flex: 1;
+}
+ 
+.rel-count {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+}
+ 
+/* === SLIDERS === */
+.slider-group {
+  padding: 8px 0;
+}
+ 
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+ 
+.slider-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+ 
+.slider-value {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  background: rgba(96, 165, 250, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+ 
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+ 
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+  cursor: pointer;
+}
+ 
+/* === NODE LEGEND === */
+.node-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+ 
+.node-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+ 
+.node-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255,255,255,0.15);
+}
+ 
+/* === CSV UPLOAD === */
+.upload-area {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+ 
+.upload-area:hover {
+  border-color: var(--accent);
+  color: var(--text-secondary);
+  background: rgba(96, 165, 250, 0.05);
+}
+ 
+.upload-area input { display: none; }
+ 
+/* === GRAPH AREA === */
+.graph-area {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(96,165,250,0.03) 0%, transparent 70%),
+    var(--bg-primary);
+}
+ 
+.graph-area svg {
+  width: 100%;
+  height: 100%;
+}
+ 
+/* === TOOLTIP === */
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 12px;
+  max-width: 360px;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1.6;
+}
+ 
+.tooltip.visible { opacity: 1; }
+ 
+.tooltip-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+ 
+.tooltip-row {
+  display: flex;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+ 
+.tooltip-row .label {
+  color: var(--text-muted);
+  min-width: 55px;
+}
+ 
+.tooltip-rel {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+ 
+/* === EDGE STYLES === */
+.link { fill: none; }
+.link-associated { stroke-dasharray: 6, 4; }
+ 
+/* === NODE STYLES === */
+.node-circle {
+  stroke: rgba(255,255,255,0.2);
+  stroke-width: 1.5px;
+  cursor: pointer;
+  transition: stroke-width 0.15s, filter 0.15s;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+ 
+.node-circle:hover {
+  stroke: #fff;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+ 
+.node-label {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 10px;
+  fill: var(--text-secondary);
+  pointer-events: none;
+  text-anchor: middle;
+  font-weight: 500;
+}
+ 
+/* === EMPTY STATE === */
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--text-muted);
+}
+ 
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { font-size: 16px; color: var(--text-secondary); margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.6; }
+</style>
+</head>
+<body>
+ 
+<div class="app">
+  <!-- HEADER -->
+  <div class="header">
+    <h1><span>mAb Stability</span> — Causal Relationship Network</h1>
+    <div class="header-stats">
+      <span>Nodes <span class="stat-val" id="stat-nodes">0</span></span>
+      <span>Edges <span class="stat-val" id="stat-edges">0</span></span>
+      <span>Papers <span class="stat-val" id="stat-papers">0</span></span>
+    </div>
+  </div>
+ 
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <!-- CSV Upload -->
+    <div class="panel">
+      <div class="panel-header">📂 Data</div>
+      <div class="panel-body">
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="csvInput" accept=".csv">
+          <span id="uploadLabel">⏳ Loading CSV from repo...</span>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Relationship Type Filters -->
+    <div class="panel">
+      <div class="panel-header">⚡ Relation Types</div>
+      <div class="panel-body" id="relFilters"></div>
+    </div>
+ 
+    <!-- Frequency / Papers Sliders -->
+    <div class="panel">
+      <div class="panel-header">🎚 Filters</div>
+      <div class="panel-body">
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Min Frequency</span>
+            <span class="slider-value" id="freqValue">≥ 3</span>
+          </div>
+          <input type="range" id="freqSlider" min="1" max="20" value="3">
+        </div>
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Min Papers</span>
+            <span class="slider-value" id="paperValue">≥ 3</span>
+          </div>
+          <input type="range" id="paperSlider" min="1" max="20" value="3">
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Node Legend -->
+    <div class="panel">
+      <div class="panel-header">🔵 Node Categories</div>
+      <div class="panel-body">
+        <div class="node-legend">
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#c4b5fd"></div>
+            <span>Sequence</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#a78bfa"></div>
+            <span>Structure</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#34d399"></div>
+            <span>Formulation</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#fbbf24"></div>
+            <span>Stress</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#f87171"></div>
+            <span>Stability</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#fb923c"></div>
+            <span>Quality Outcome</span>
+          </div>
+          <div class="node-legend-item" style="margin-top:4px; padding-top:8px; border-top:1px solid var(--border);">
+            <span style="color:var(--text-muted); font-size:11px;">Node size = total frequency  ·  Arrow width = frequency</span>
+          </div>
+          <div class="node-legend-item" style="margin-top:4px; padding-top:8px; border-top:1px solid var(--border);">
+            <div class="node-legend-dot" style="background:#22c55e"></div>
+            <span style="font-size:11px;">Inhibits / Stabilizes (green)</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#ef4444"></div>
+            <span style="font-size:11px;">Promotes / Destabilizes (red)</span>
+          </div>
+          <div class="node-legend-item">
+            <div class="node-legend-dot" style="background:#94a3b8"></div>
+            <span style="font-size:11px;">Neutral / Correlates (gray)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Focus Panel -->
+    <div class="panel" id="focusPanel" style="display:none;">
+      <div class="panel-header">🎯 Selected Node</div>
+      <div class="panel-body" id="focusInfo" style="max-height:40vh; overflow-y:auto;"></div>
+    </div>
+  </div>
+ 
+  <!-- GRAPH -->
+  <div class="graph-area" id="graphArea">
+    <svg id="graphSvg"></svg>
+  </div>
+</div>
+ 
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip"></div>
+ 
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const REL_CONFIG = {
+  // Group A: General Causal (9)
+  stabilizes:    { color: '#22c55e', label: 'Stabilizes',      symbol: '⊕', group: 'A', effect: 'positive' },
+  destabilizes:  { color: '#ef4444', label: 'Destabilizes',   symbol: '⊖', group: 'A', effect: 'negative' },
+  increases:     { color: '#ef4444', label: 'Increases',         symbol: '↑', group: 'A', effect: 'negative' },
+  decreases:     { color: '#22c55e', label: 'Decreases',         symbol: '↓', group: 'A', effect: 'positive' },
+  inhibits:      { color: '#22c55e', label: 'Inhibits',          symbol: '⊣', group: 'A', effect: 'positive' },
+  promotes:      { color: '#ef4444', label: 'Promotes',          symbol: '»', group: 'A', effect: 'negative' },
+  induces:       { color: '#ef4444', label: 'Induces',           symbol: '⇒', group: 'A', effect: 'negative' },
+  prevents:      { color: '#22c55e', label: 'Prevents',          symbol: '⊘', group: 'A', effect: 'positive' },
+  requires:      { color: '#94a3b8', label: 'Requires',          symbol: '⊂', group: 'A', effect: 'neutral' },
+  // Group B: Structure/Binding (3)
+  modifies:      { color: '#94a3b8', label: 'Modifies',       symbol: '~>', group: 'B', effect: 'neutral' },
+  binds:         { color: '#94a3b8', label: 'Binds',             symbol: '⊷',  group: 'B', effect: 'neutral' },
+  shields:       { color: '#22c55e', label: 'Shields',           symbol: '▷',  group: 'B', effect: 'positive' },
+  // Group C: Degradation Mechanism (9)
+  aggregates:    { color: '#ef4444', label: 'Aggregates',        symbol: 'Ag', group: 'C', effect: 'negative' },
+  oxidizes:      { color: '#ef4444', label: 'Oxidizes',          symbol: 'Ox', group: 'C', effect: 'negative' },
+  deamidates:    { color: '#ef4444', label: 'Deamidates',    symbol: 'Da', group: 'C', effect: 'negative' },
+  isomerizes:    { color: '#ef4444', label: 'Isomerizes',      symbol: 'Is', group: 'C', effect: 'negative' },
+  fragments:     { color: '#ef4444', label: 'Fragments',        symbol: '✂',  group: 'C', effect: 'negative' },
+  unfolds:       { color: '#ef4444', label: 'Unfolds',          symbol: 'Un', group: 'C', effect: 'negative' },
+  adsorbs:       { color: '#ef4444', label: 'Adsorbs',           symbol: 'Ad', group: 'C', effect: 'negative' },
+  precipitates:  { color: '#ef4444', label: 'Precipitates',       symbol: 'Pp', group: 'C', effect: 'negative' },
+  degrades:      { color: '#ef4444', label: 'Degrades',          symbol: 'Dg', group: 'C', effect: 'negative' },
+  // Group D: Non-directional (1)
+  correlates:    { color: '#94a3b8', label: 'Correlates',      symbol: '~',  group: 'D', effect: 'neutral' },
+};
+ 
+const REL_GROUPS = {
+  A: { label: 'General Causal', count: 9 },
+  B: { label: 'Structure/Binding', count: 3 },
+  C: { label: 'Degradation Mechanism', count: 9 },
+  D: { label: 'Non-directional', count: 1 },
+};
+ 
+// 6 node categories
+const CATEGORY_COLORS = {
+  sequence:        '#c4b5fd',
+  structure:       '#a78bfa',
+  formulation:     '#34d399',
+  stress:          '#fbbf24',
+  stability:       '#f87171',
+  quality_outcome: '#fb923c',
+};
+const DEFAULT_CATEGORY = 'stability';
+ 
+// v3 CSV compatibility mapping
+const STRUCTURE_KW = ['domain','fab','fc ','fc-','hinge','patch','hydrophobic','charge patch','disulfide','conformation','folding','tertiary','quaternary','beta-sheet','loop','framework','glycan shield'];
+const QUALITY_KW = ['charge variant','particle formation','particle count','immunogenicity','viscosity','high viscosity','turbidity','potency','hmw','sec monomer','monomer %','subvisible','efficacy','safety','toxicity','cytotoxicity','sensitivity','opalescence','bioactivity','binding affinity','quality outcome','thermal denaturation'];
+ 
+function mapCategory(oldCat, name) {
+  if (CATEGORY_COLORS[oldCat]) return oldCat;
+  const lower = (name || '').toLowerCase();
+  if (oldCat === 'sequence_structure') {
+    if (STRUCTURE_KW.some(k => lower.includes(k))) return 'structure';
+    return 'sequence';
+  }
+  if (oldCat === 'formulation_factor') return 'formulation';
+  if (oldCat === 'stress_condition') return 'stress';
+  if (oldCat === 'stability_property' || oldCat === 'degradation' || oldCat === 'degradation_pathway') return 'stability';
+  if (QUALITY_KW.some(k => lower.includes(k))) return 'quality_outcome';
+  return 'stability';
+}
+ 
+// ============================================================
+// SAMPLE DATA (demo works without Step 2)
+// ============================================================
+const SAMPLE_DATA = [
+  // --- Group A: General Causal ---
+  {cause:"sucrose",effect:"conformational stability",relationship:"stabilizes",frequency:18,num_papers:14,main_confidence:"high",sample_evidence:"Sucrose stabilizes mAb conformation through preferential exclusion mechanism"},
+  {cause:"agitation stress",effect:"colloidal stability",relationship:"destabilizes",frequency:15,num_papers:12,main_confidence:"high",sample_evidence:"Mechanical agitation destabilizes mAb formulations via interfacial stress"},
+  {cause:"high concentration",effect:"viscosity",relationship:"increases",frequency:35,num_papers:27,main_confidence:"high",sample_evidence:"Concentrated mAb formulations show dramatically increased viscosity"},
+  {cause:"arginine",effect:"viscosity",relationship:"decreases",frequency:12,num_papers:9,main_confidence:"high",sample_evidence:"Arginine reduces viscosity of concentrated mAb solutions"},
+  {cause:"polysorbate 80",effect:"aggregation",relationship:"inhibits",frequency:20,num_papers:16,main_confidence:"high",sample_evidence:"Polysorbate 80 inhibits interfacial stress-induced aggregation"},
+  {cause:"low pH",effect:"deamidation",relationship:"promotes",frequency:14,num_papers:11,main_confidence:"high",sample_evidence:"Acidic conditions promote asparagine deamidation in CDR regions"},
+  {cause:"freeze-thaw",effect:"subvisible particles",relationship:"induces",frequency:16,num_papers:13,main_confidence:"high",sample_evidence:"Freeze-thaw cycles induce generation of subvisible particles"},
+  {cause:"surfactant",effect:"surface adsorption",relationship:"prevents",frequency:11,num_papers:8,main_confidence:"high",sample_evidence:"Surfactants prevent protein adsorption at air-liquid interface"},
+  {cause:"SC delivery",effect:"high concentration",relationship:"requires",frequency:24,num_papers:20,main_confidence:"high",sample_evidence:"Subcutaneous administration requires concentrated antibody formulations above 100 mg/mL"},
+  // --- Group B: Structure/Binding ---
+  {cause:"oxidation",effect:"CDR conformation",relationship:"modifies",frequency:10,num_papers:8,main_confidence:"medium",sample_evidence:"Met oxidation in CDR regions modifies antigen-binding conformation"},
+  {cause:"excipient",effect:"protein surface",relationship:"binds",frequency:9,num_papers:7,main_confidence:"medium",sample_evidence:"Excipients bind to exposed hydrophobic regions on protein surface"},
+  {cause:"polysorbate 80",effect:"hydrophobic patches",relationship:"shields",frequency:13,num_papers:10,main_confidence:"high",sample_evidence:"PS80 shields aggregation-prone hydrophobic patches from solvent exposure"},
+  // --- Group C: Degradation Mechanism ---
+  {cause:"thermal stress",effect:"mAb",relationship:"aggregates",frequency:28,num_papers:22,main_confidence:"high",sample_evidence:"Thermal stress at 40C accelerates mAb aggregate formation"},
+  {cause:"light exposure",effect:"Trp residues",relationship:"oxidizes",frequency:10,num_papers:7,main_confidence:"high",sample_evidence:"UV light exposure oxidizes tryptophan residues in mAb"},
+  {cause:"alkaline pH",effect:"Asn residues",relationship:"deamidates",frequency:12,num_papers:9,main_confidence:"high",sample_evidence:"pH above 7 promotes deamidation of asparagine residues"},
+  {cause:"acidic pH",effect:"Asp residues",relationship:"isomerizes",frequency:8,num_papers:6,main_confidence:"medium",sample_evidence:"Acidic conditions promote aspartate isomerization in CDR"},
+  {cause:"low pH",effect:"hinge region",relationship:"fragments",frequency:7,num_papers:5,main_confidence:"medium",sample_evidence:"Acidic pH induces cleavage at the hinge region of IgG1"},
+  {cause:"high temperature",effect:"Fab domain",relationship:"unfolds",frequency:18,num_papers:14,main_confidence:"high",sample_evidence:"Elevated temperature causes thermal unfolding of Fab domain below Tm"},
+  {cause:"mAb",effect:"glass surface",relationship:"adsorbs",frequency:9,num_papers:7,main_confidence:"medium",sample_evidence:"Protein adsorbs to borosilicate glass surface of prefilled syringes"},
+  {cause:"high concentration",effect:"mAb at low temperature",relationship:"precipitates",frequency:6,num_papers:4,main_confidence:"low",sample_evidence:"LLPS and opalescence observed at high concentration and low temperature"},
+  {cause:"peroxide",effect:"polysorbate 80",relationship:"degrades",frequency:8,num_papers:6,main_confidence:"high",sample_evidence:"Residual peroxides degrade polysorbate via auto-oxidation"},
+  // --- Group D: Non-directional ---
+  {cause:"glycosylation pattern",effect:"Tm",relationship:"correlates",frequency:7,num_papers:5,main_confidence:"medium",sample_evidence:"Glycan composition correlates with thermal melting temperature"},
+  // --- Additional chain relations ---
+  {cause:"aggregation",effect:"immunogenicity risk",relationship:"increases",frequency:22,num_papers:18,main_confidence:"high",sample_evidence:"Protein aggregates increase risk of unwanted immune response"},
+  {cause:"subvisible particles",effect:"immunogenicity risk",relationship:"increases",frequency:11,num_papers:9,main_confidence:"medium",sample_evidence:"Subvisible particles may act as adjuvants triggering immune response"},
+  {cause:"viscosity",effect:"injectability",relationship:"decreases",frequency:20,num_papers:16,main_confidence:"high",sample_evidence:"Elevated viscosity impairs syringeability for subcutaneous injection"},
+  {cause:"deamidation",effect:"acidic charge variants",relationship:"increases",frequency:13,num_papers:10,main_confidence:"high",sample_evidence:"Asparagine deamidation generates acidic species detectable by CEX"},
+  {cause:"oxidation",effect:"potency",relationship:"decreases",frequency:11,num_papers:8,main_confidence:"medium",sample_evidence:"Oxidative modifications in CDR regions reduce antigen binding affinity"},
+  {cause:"NaCl",effect:"viscosity",relationship:"decreases",frequency:7,num_papers:5,main_confidence:"medium",sample_evidence:"Ionic strength modulation with NaCl lowers solution viscosity"},
+  {cause:"histidine buffer",effect:"conformational stability",relationship:"stabilizes",frequency:9,num_papers:7,main_confidence:"medium",sample_evidence:"Histidine buffer at pH 6.0 provides favorable conformational stability"},
+  {cause:"high concentration",effect:"protein-protein interaction",relationship:"increases",frequency:19,num_papers:15,main_confidence:"high",sample_evidence:"Elevated concentration increases reversible self-association"},
+  {cause:"protein-protein interaction",effect:"viscosity",relationship:"increases",frequency:14,num_papers:11,main_confidence:"high",sample_evidence:"Reversible self-association contributes to non-Newtonian viscosity behavior"},
+  {cause:"agitation stress",effect:"mAb",relationship:"aggregates",frequency:17,num_papers:14,main_confidence:"high",sample_evidence:"Mechanical stress from shaking induces interfacial aggregation"},
+  {cause:"PS80 degradation products",effect:"subvisible particles",relationship:"induces",frequency:8,num_papers:6,main_confidence:"high",sample_evidence:"Free fatty acids from PS80 degradation nucleate visible and subvisible particles"},
+  {cause:"silicone oil",effect:"subvisible particles",relationship:"induces",frequency:6,num_papers:5,main_confidence:"medium",sample_evidence:"Silicone oil droplets from prefilled syringes contribute to particle count"},
+  {cause:"trehalose",effect:"conformational stability",relationship:"stabilizes",frequency:10,num_papers:8,main_confidence:"high",sample_evidence:"Trehalose protects mAb conformation during lyophilization and storage"},
+];
+ 
+// ============================================================
+// STATE
+// ============================================================
+let rawData = [...SAMPLE_DATA];
+let activeRels = new Set(Object.keys(REL_CONFIG));
+let minFreq = 3;
+let minPapers = 3;
+let simulation = null;
+let focusedNode = null;
+let lastNodeSel = null;
+let lastLinkSel = null;
+let lastNodes = null;
+let lastLinks = null;
+ 
+// Link path: from/to node edge
+function linkPath(d) {
+  const sx = d.source.x, sy = d.source.y;
+  const tx = d.target.x, ty = d.target.y;
+  const dx = tx - sx, dy = ty - sy;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const sr = d.source.r || 6, tr = d.target.r || 6;
+  const x1 = sx + (dx / dist) * sr;
+  const y1 = sy + (dy / dist) * sr;
+  const x2 = tx - (dx / dist) * tr;
+  const y2 = ty - (dy / dist) * tr;
+  const dr = dist * 1.5;
+  return `M${x1},${y1}A${dr},${dr} 0 0,1 ${x2},${y2}`;
+}
+ 
+// ============================================================
+// INIT
+// ============================================================
+const svg = d3.select('#graphSvg');
+const tooltip = document.getElementById('tooltip');
+let width, height;
+ 
+function resize() {
+  const area = document.getElementById('graphArea');
+  width = area.clientWidth;
+  height = area.clientHeight;
+  svg.attr('viewBox', [0, 0, width, height]);
+}
+resize();
+window.addEventListener('resize', () => { resize(); updateGraph(); });
+ 
+// Zoom
+const zoomGroup = svg.append('g');
+svg.call(d3.zoom()
+  .scaleExtent([0.2, 5])
+  .on('zoom', (e) => zoomGroup.attr('transform', e.transform))
+);
+ 
+// Arrow markers (fixed size)
+const defs = svg.append('defs');
+Object.entries(REL_CONFIG).forEach(([key, cfg]) => {
+  defs.append('marker')
+    .attr('id', `arrow-${key}`)
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 10)
+    .attr('refY', 0)
+    .attr('markerWidth', 10)
+    .attr('markerHeight', 10)
+    .attr('orient', 'auto')
+    .attr('markerUnits', 'userSpaceOnUse')
+    .append('path')
+    .attr('d', 'M0,-4L10,0L0,4')
+    .attr('fill', cfg.color);
+});
+ 
+// Focus mode arrows
+['#38bdf8', '#fb923c'].forEach((color, i) => {
+  defs.append('marker')
+    .attr('id', `arrow-focus-${i === 0 ? 'in' : 'out'}`)
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 10).attr('refY', 0)
+    .attr('markerWidth', 10).attr('markerHeight', 10)
+    .attr('orient', 'auto')
+    .attr('markerUnits', 'userSpaceOnUse')
+    .append('path').attr('d', 'M0,-4L10,0L0,4').attr('fill', color);
+});
+ 
+// ============================================================
+// BUILD FILTERS UI
+// ============================================================
+function buildRelFilters() {
+  const container = document.getElementById('relFilters');
+  const counts = {};
+  rawData.forEach(d => { counts[d.relationship] = (counts[d.relationship] || 0) + 1; });
+ 
+  container.innerHTML = '';
+  let currentGroup = '';
+ 
+  Object.entries(REL_CONFIG).forEach(([key, cfg]) => {
+    // Group header
+    if (cfg.group !== currentGroup) {
+      currentGroup = cfg.group;
+      const groupInfo = REL_GROUPS[currentGroup];
+      const header = document.createElement('div');
+      header.style.cssText = 'font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted); padding:8px 0 4px; margin-top:6px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+      if (currentGroup === 'A') header.style.borderTop = 'none';
+      header.innerHTML = `<span>${currentGroup}. ${groupInfo.label}</span><span style="font-size:9px; color:var(--accent); font-family:JetBrains Mono,monospace;">All</span>`;
+      header.addEventListener('click', () => {
+        const groupRels = Object.entries(REL_CONFIG).filter(([,v]) => v.group === currentGroup).map(([k]) => k);
+        const allOn = groupRels.every(r => activeRels.has(r));
+        groupRels.forEach(r => { if (allOn) activeRels.delete(r); else activeRels.add(r); });
+        buildRelFilters();
+        updateGraph();
+      });
+      container.appendChild(header);
+    }
+ 
+    const count = counts[key] || 0;
+    const div = document.createElement('label');
+    div.className = 'rel-filter';
+    const isDashed = key === 'correlates';
+    div.innerHTML = `
+      <input type="checkbox" data-rel="${key}" ${activeRels.has(key) ? 'checked' : ''}>
+      <div class="rel-color" style="background:${isDashed ? `repeating-linear-gradient(90deg,${cfg.color} 0,${cfg.color} 4px,transparent 4px,transparent 7px)` : cfg.color}"></div>
+      <span class="rel-label">${cfg.label}</span>
+      <span class="rel-count">${count}</span>
+    `;
+    div.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) activeRels.add(key);
+      else activeRels.delete(key);
+      updateGraph();
+    });
+    container.appendChild(div);
+  });
+}
+ 
+// Sliders
+let debounceTimer;
+ 
+document.getElementById('freqSlider').addEventListener('input', (e) => {
+  minFreq = +e.target.value;
+  document.getElementById('freqValue').textContent = `≥ ${minFreq}`;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => updateGraph(), 300);
+});
+ 
+document.getElementById('paperSlider').addEventListener('input', (e) => {
+  minPapers = +e.target.value;
+  document.getElementById('paperValue').textContent = `≥ ${minPapers}`;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => updateGraph(), 300);
+});
+ 
+// CSV Upload
+document.getElementById('uploadArea').addEventListener('click', () => {
+  document.getElementById('csvInput').click();
+});
+ 
+document.getElementById('csvInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    const text = evt.target.result;
+    rawData = parseCSV(text);
+    // Update slider max values
+    const maxF = Math.max(...rawData.map(d => d.frequency), 20);
+    const maxP = Math.max(...rawData.map(d => d.num_papers), 20);
+    document.getElementById('freqSlider').max = maxF;
+    document.getElementById('paperSlider').max = maxP;
+    buildRelFilters();
+    updateGraph();
+    document.getElementById('uploadArea').innerHTML =
+      `✅ ${file.name} loaded<br><small style="color:var(--text-muted)">${rawData.length} edges</small>`;
+  };
+  reader.readAsText(file);
+});
+ 
+function parseCSV(text) {
+  text = text.replace(/^\ufeff/, '');  // Remove BOM
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  return lines.slice(1).map(line => {
+    // Handle quoted fields with commas
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    for (const char of line) {
+      if (char === '"') { inQuotes = !inQuotes; }
+      else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+      else { current += char; }
+    }
+    values.push(current.trim());
+ 
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+    obj.frequency = parseInt(obj.frequency) || 1;
+    obj.num_papers = parseInt(obj.num_papers) || 1;
+    return obj;
+  }).filter(d => d.cause && d.effect);
+}
+ 
+// ============================================================
+// GRAPH UPDATE
+// ============================================================
+function updateGraph() {
+  // Filter data
+  const filtered = rawData.filter(d =>
+    activeRels.has(d.relationship) &&
+    d.frequency >= minFreq &&
+    d.num_papers >= minPapers
+  );
+ 
+  // Build nodes and links
+  const nodeMap = new Map();
+  const nodeCatCounts = {};
+  const links = [];
+ 
+  filtered.forEach(d => {
+    if (!nodeMap.has(d.cause)) nodeMap.set(d.cause, { id: d.cause, inW: 0, outW: 0, total: 0 });
+    if (!nodeMap.has(d.effect)) nodeMap.set(d.effect, { id: d.effect, inW: 0, outW: 0, total: 0 });
+ 
+    nodeMap.get(d.cause).outW += d.frequency;
+    nodeMap.get(d.cause).total += d.frequency;
+    nodeMap.get(d.effect).inW += d.frequency;
+    nodeMap.get(d.effect).total += d.frequency;
+ 
+    // Track categories
+    if (d.category_cause) {
+      const mc = mapCategory(d.category_cause, d.cause);
+      if (!nodeCatCounts[d.cause]) nodeCatCounts[d.cause] = {};
+      nodeCatCounts[d.cause][mc] = (nodeCatCounts[d.cause][mc] || 0) + 1;
+    }
+    if (d.category_effect) {
+      const mc = mapCategory(d.category_effect, d.effect);
+      if (!nodeCatCounts[d.effect]) nodeCatCounts[d.effect] = {};
+      nodeCatCounts[d.effect][mc] = (nodeCatCounts[d.effect][mc] || 0) + 1;
+    }
+ 
+    links.push({
+      source: d.cause,
+      target: d.effect,
+      relationship: d.relationship,
+      frequency: d.frequency,
+      num_papers: d.num_papers,
+      confidence: d.main_confidence || 'medium',
+      evidence: d.sample_evidence || '',
+    });
+  });
+ 
+  const nodes = Array.from(nodeMap.values());
+  // Assign category per node (highest freq, else keyword guess)
+  const SEQ_KW = ['residue','cdr','mutation','variant','glycosylation site','asn','asp','met','trp','sequence','vh','vl','vhh','scfv','nanobod','amino acid'];
+  const STR_KW = ['domain','fab','fc ','fc-','hinge','patch','hydrophobic','charge patch','disulfide','conformation','folding','unfolding','glycan shield','loop','framework'];
+  const FORM_KW = ['polysorbate','sucrose','trehalose','arginine','histidine','buffer','ph','concentration','nacl','mannitol','excipient','surfactant','lyophiliz','formulation'];
+  const STRESS_KW = ['thermal','agitation','light exposure','freeze-thaw','storage','mechanical stress','humidity','uv','shaking','temperature','stress'];
+  function guessCategory(name) {
+    const l = name.toLowerCase();
+    if (SEQ_KW.some(k => l.includes(k))) return 'sequence';
+    if (STR_KW.some(k => l.includes(k))) return 'structure';
+    if (FORM_KW.some(k => l.includes(k))) return 'formulation';
+    if (STRESS_KW.some(k => l.includes(k))) return 'stress';
+    return 'stability';
+  }
+  nodes.forEach(n => {
+    const counts = nodeCatCounts[n.id];
+    if (counts && Object.keys(counts).length > 0) {
+      n.category = Object.entries(counts).sort((a,b) => b[1]-a[1])[0][0];
+    } else {
+      n.category = guessCategory(n.id);
+    }
+  });
+ 
+  // Update stats
+  const allPapers = new Set();
+  filtered.forEach(d => {
+    if (d.pmid_list) d.pmid_list.split(';').forEach(p => allPapers.add(p));
+    else allPapers.add(`${d.cause}-${d.effect}`);
+  });
+  document.getElementById('stat-nodes').textContent = nodes.length;
+  document.getElementById('stat-edges').textContent = links.length;
+  document.getElementById('stat-papers').textContent = allPapers.size;
+ 
+  // Scales
+  const maxFreq = Math.max(...links.map(l => l.frequency), 1);
+  const maxTotal = Math.max(...nodes.map(n => n.total), 1);
+  const rScale = d3.scaleSqrt().domain([1, maxTotal]).range([6, 30]);
+  const wScale = d3.scaleLinear().domain([1, maxFreq]).range([1, 7]);
+  // Store radius per node
+  nodes.forEach(n => { n.r = rScale(n.total); });
+ 
+  // Clear
+  zoomGroup.selectAll('*').remove();
+ 
+  if (nodes.length === 0) {
+    zoomGroup.append('text')
+      .attr('x', width / 2).attr('y', height / 2)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#556680')
+      .attr('font-size', 14)
+      .text('No data matches the current filters. Try relaxing the conditions.');
+    return;
+  }
+ 
+  // Layout calculation (no simulation, position only)
+  if (simulation) simulation.stop();
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(120))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => rScale(d.total) + 10))
+    .stop();
+  for (let i = 0; i < 300; i++) simulation.tick();
+  simulation = null; // Release simulation
+ 
+  // Links
+  const link = zoomGroup.append('g')
+    .selectAll('path')
+    .data(links)
+    .join('path')
+    .attr('class', d => `link ${d.relationship === 'correlates' ? 'link-associated' : ''}`)
+    .attr('stroke', d => REL_CONFIG[d.relationship]?.color || '#475569')
+    .attr('stroke-width', d => wScale(d.frequency))
+    .attr('stroke-opacity', 0.6)
+    .attr('marker-end', d => `url(#arrow-${d.relationship})`)
+    .attr('d', d => linkPath(d))
+    .on('mouseover', (event, d) => showEdgeTooltip(event, d))
+    .on('mousemove', (event) => moveTooltip(event))
+    .on('mouseout', hideTooltip);
+ 
+  // Nodes
+  const node = zoomGroup.append('g')
+    .selectAll('g')
+    .data(nodes)
+    .join('g')
+    .attr('transform', d => `translate(${d.x},${d.y})`)
+    .call(d3.drag()
+      .on('drag', (event, d) => {
+        d.x = event.x; d.y = event.y;
+        d3.select(event.sourceEvent.target.parentNode)
+          .attr('transform', `translate(${d.x},${d.y})`);
+        link.attr('d', l => linkPath(l));
+      }));
+ 
+  node.append('circle')
+    .attr('class', 'node-circle')
+    .attr('r', d => rScale(d.total))
+    .attr('fill', d => CATEGORY_COLORS[d.category] || CATEGORY_COLORS[DEFAULT_CATEGORY])
+    .attr('fill-opacity', 0.85)
+    .on('mouseover', (event, d) => showNodeTooltip(event, d))
+    .on('mousemove', (event) => moveTooltip(event))
+    .on('mouseout', hideTooltip)
+    .on('click', (event, d) => {
+      event.stopPropagation();
+      if (focusedNode === d.id) { clearFocus(); } else { focusedNode = d.id; applyFocus(); }
+    });
+ 
+  node.append('text')
+    .attr('class', 'node-label')
+    .attr('dy', d => rScale(d.total) + 14)
+    .text(d => d.id.length > 25 ? d.id.slice(0, 23) + '…' : d.id);
+ 
+  // Store references for focus mode
+  lastNodeSel = node;
+  lastLinkSel = link;
+  lastNodes = nodes;
+  lastLinks = links;
+  if (focusedNode) applyFocus();
+}
+ 
+// ============================================================
+// FOCUS MODE
+// ============================================================
+function applyFocus() {
+  if (!focusedNode || !lastNodeSel || !lastLinkSel) return;
+  const getId = x => typeof x === 'object' ? x.id : x;
+ 
+  // Remove existing labels
+  zoomGroup.selectAll('.focus-label').remove();
+ 
+  // === 1-hop ===
+  const in1 = [], out1 = [];
+  lastLinks.forEach(l => {
+    const sid = getId(l.source), tid = getId(l.target);
+    if (tid === focusedNode) in1.push(l);
+    if (sid === focusedNode) out1.push(l);
+  });
+  const hop1in = new Set(in1.map(l => getId(l.source)));
+  const hop1out = new Set(out1.map(l => getId(l.target)));
+  const hop1nodes = new Set([focusedNode, ...hop1in, ...hop1out]);
+ 
+  // === 2-hop: same direction only ===
+  const in2 = [], out2 = [];
+  lastLinks.forEach(l => {
+    const sid = getId(l.source), tid = getId(l.target);
+    if (hop1out.has(sid) && !hop1nodes.has(tid)) out2.push(l);
+    if (hop1in.has(tid) && !hop1nodes.has(sid)) in2.push(l);
+  });
+  const hop2nodes = new Set();
+  in2.forEach(l => hop2nodes.add(getId(l.source)));
+  out2.forEach(l => hop2nodes.add(getId(l.target)));
+ 
+  const lk = l => getId(l.source) + '>' + getId(l.target);
+  const in1Set = new Set(in1.map(lk));
+  const out1Set = new Set(out1.map(lk));
+  const in2Set = new Set(in2.map(lk));
+  const out2Set = new Set(out2.map(lk));
+ 
+  lastNodeSel.select('circle')
+    .attr('fill-opacity', d => {
+      if (d.id === focusedNode) return 1;
+      if (hop1nodes.has(d.id)) return 0.9;
+      if (hop2nodes.has(d.id)) return 0.5;
+      return 0.04;
+    })
+    .attr('stroke', d => d.id === focusedNode ? '#fff' : 'rgba(255,255,255,0.15)')
+    .attr('stroke-width', d => d.id === focusedNode ? 3 : 1.5);
+  lastNodeSel.select('text')
+    .attr('fill-opacity', d => {
+      if (d.id === focusedNode || hop1nodes.has(d.id)) return 1;
+      if (hop2nodes.has(d.id)) return 0.6;
+      return 0.04;
+    });
+ 
+  lastLinkSel
+    .attr('stroke-opacity', d => {
+      const k = lk(d);
+      if (in1Set.has(k) || out1Set.has(k)) return 0.85;
+      if (in2Set.has(k) || out2Set.has(k)) return 0.4;
+      return 0;
+    })
+    .attr('stroke', d => {
+      const k = lk(d);
+      if (in1Set.has(k) || in2Set.has(k)) return '#38bdf8';
+      if (out1Set.has(k) || out2Set.has(k)) return '#fb923c';
+      return 'none';
+    })
+    .attr('stroke-width', d => {
+      const k = lk(d);
+      if (in1Set.has(k) || out1Set.has(k)) return 2.5;
+      if (in2Set.has(k) || out2Set.has(k)) return 1.5;
+      return 0;
+    })
+    .attr('marker-end', d => {
+      const k = lk(d);
+      if (in1Set.has(k) || in2Set.has(k)) return 'url(#arrow-focus-in)';
+      if (out1Set.has(k) || out2Set.has(k)) return 'url(#arrow-focus-out)';
+      return 'none';
+    });
+ 
+  // === Edge Labels (1-hop edges only) ===
+  const allFocusEdges = [...in1, ...out1];
+  allFocusEdges.forEach(d => {
+    const sx = d.source.x, sy = d.source.y, tx = d.target.x, ty = d.target.y;
+    const mx = (sx + tx) / 2, my = (sy + ty) / 2;
+    const dx = tx - sx, dy = ty - sy;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const k = lk(d);
+    const isIn = in1Set.has(k);
+    const offset = isIn ? -12 : 12;
+    const nx = -dy / dist * offset, ny = dx / dist * offset;
+    const color = isIn ? '#38bdf8' : '#fb923c';
+    zoomGroup.append('text')
+      .attr('class', 'focus-label')
+      .attr('x', mx + nx)
+      .attr('y', my + ny)
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('fill', color)
+      .attr('font-size', 10)
+      .attr('font-weight', 600)
+      .attr('paint-order', 'stroke')
+      .attr('stroke', '#0f172a')
+      .attr('stroke-width', 3)
+      .text(d.relationship);
+  });
+ 
+  // Info panel with chains
+  const panel = document.getElementById('focusPanel');
+  const info = document.getElementById('focusInfo');
+  panel.style.display = 'block';
+  const catLabels = { sequence:'Sequence', structure:'Structure', formulation:'Formulation', stress:'Stress', stability:'Stability', quality_outcome:'Quality Outcome' };
+  const nd = lastNodes.find(n => n.id === focusedNode);
+  const catLabel = catLabels[nd?.category] || nd?.category || '';
+  const catColor = CATEGORY_COLORS[nd?.category] || '#888';
+  const getCat = id => { const n = lastNodes.find(x => x.id === id); return catLabels[n?.category] || ''; };
+ 
+  let html = `<div style="font-weight:600; font-size:13px; margin-bottom:6px;">${focusedNode}</div>`;
+  html += `<div style="font-size:11px; color:${catColor}; margin-bottom:10px;">${catLabel}</div>`;
+ 
+  if (out1.length > 0) {
+    html += `<div style="font-size:10px; color:#fb923c; margin-bottom:4px; font-weight:600;">-> Effect Chain (${out1.length})</div>`;
+    out1.sort((a,b) => b.frequency - a.frequency);
+    out1.slice(0, 15).forEach(e => {
+      const tgt = getId(e.target);
+      html += `<div style="font-size:11px; margin:2px 0; padding:3px 6px; border-radius:3px; background:var(--bg-primary);"><span style="color:#fb923c;">${e.relationship}</span> -> ${tgt} <span style="color:var(--text-muted);font-size:9px;">[${getCat(tgt)}]</span></div>`;
+      const next = out2.filter(l2 => getId(l2.source) === tgt);
+      next.sort((a,b) => b.frequency - a.frequency).slice(0, 3).forEach(e2 => {
+        const tgt2 = getId(e2.target);
+        html += `<div style="font-size:10px; margin-left:16px; padding:2px 0; color:var(--text-muted);">  -> <span style="color:#fb923c80;">${e2.relationship}</span> -> ${tgt2} <span style="font-size:9px;">[${getCat(tgt2)}]</span></div>`;
+      });
+    });
+  }
+ 
+  if (in1.length > 0) {
+    html += `<div style="font-size:10px; color:#38bdf8; margin-top:8px; margin-bottom:4px; font-weight:600;"><- Cause Chain (${in1.length})</div>`;
+    in1.sort((a,b) => b.frequency - a.frequency);
+    in1.slice(0, 15).forEach(e => {
+      const src = getId(e.source);
+      html += `<div style="font-size:11px; margin:2px 0; padding:3px 6px; border-radius:3px; background:var(--bg-primary);">${src} <span style="color:var(--text-muted);font-size:9px;">[${getCat(src)}]</span> <span style="color:#38bdf8;">${e.relationship}</span></div>`;
+      const prev = in2.filter(l2 => getId(l2.target) === src);
+      prev.sort((a,b) => b.frequency - a.frequency).slice(0, 3).forEach(e2 => {
+        const src2 = getId(e2.source);
+        html += `<div style="font-size:10px; margin-left:16px; padding:2px 0; color:var(--text-muted);">  ${src2} <span style="font-size:9px;">[${getCat(src2)}]</span> <span style="color:#38bdf880;">${e2.relationship}</span> -></div>`;
+      });
+    });
+  }
+ 
+  html += `<div style="margin-top:8px; font-size:10px; color:var(--text-muted); cursor:pointer; text-decoration:underline;" onclick="clearFocus()">Clear Focus</div>`;
+  info.innerHTML = html;
+}
+ 
+function clearFocus() {
+  focusedNode = null;
+  zoomGroup.selectAll('.focus-label').remove();
+  if (lastNodeSel) {
+    lastNodeSel.select('circle').attr('fill-opacity', 0.85).attr('stroke', 'rgba(255,255,255,0.2)').attr('stroke-width', 1.5);
+    lastNodeSel.select('text').attr('fill-opacity', 1);
+  }
+  if (lastLinkSel) {
+    lastLinkSel
+      .attr('stroke-opacity', 0.6)
+      .attr('stroke', d => REL_CONFIG[d.relationship]?.color || '#475569')
+      .attr('stroke-width', d => {
+        const maxF = Math.max(...lastLinks.map(l => l.frequency), 1);
+        return d3.scaleLinear().domain([1, maxF]).range([1, 7])(d.frequency);
+      })
+      .attr('marker-end', d => `url(#arrow-${d.relationship})`)
+      .attr('d', d => linkPath(d));
+  }
+  document.getElementById('focusPanel').style.display = 'none';
+}
+ 
+// Click on background to clear focus
+svg.on('click', () => clearFocus());
+ 
+// ============================================================
+// TOOLTIPS
+// ============================================================
+function showNodeTooltip(event, d) {
+  const catLabels = { sequence:'Sequence', structure:'Structure', formulation:'Formulation', stress:'Stress', stability:'Stability', quality_outcome:'Quality Outcome' };
+  const catLabel = catLabels[d.category] || d.category || 'Unclassified';
+  const catColor = CATEGORY_COLORS[d.category] || '#888';
+  tooltip.innerHTML = `
+    <div class="tooltip-title">${d.id}</div>
+    <div class="tooltip-row"><span class="label">Category</span> <span style="color:${catColor}; font-weight:600;">${catLabel}</span></div>
+    <div class="tooltip-row"><span class="label">Total Mentions</span> ${d.total}x</div>
+    <div class="tooltip-row"><span class="label">Cause↗</span> ${d.outW}x</div>
+    <div class="tooltip-row"><span class="label">Effect↙</span> ${d.inW}x</div>
+  `;
+  tooltip.classList.add('visible');
+}
+ 
+function showEdgeTooltip(event, d) {
+  const cfg = REL_CONFIG[d.relationship] || {};
+  tooltip.innerHTML = `
+    <div class="tooltip-title">${d.source.id || d.source} ${cfg.symbol || '→'} ${d.target.id || d.target}</div>
+    <div class="tooltip-row"><span class="label">Relation</span>
+      <span class="tooltip-rel" style="background:${cfg.color}22; color:${cfg.color}">${cfg.label || d.relationship}</span>
+    </div>
+    <div class="tooltip-row"><span class="label">Frequency</span> ${d.frequency}x</div>
+    <div class="tooltip-row"><span class="label">Papers</span> ${d.num_papers}</div>
+    <div class="tooltip-row"><span class="label">Confidence</span> ${d.confidence}</div>
+    ${d.evidence ? `<div class="tooltip-row" style="margin-top:4px; padding-top:4px; border-top:1px solid var(--border);"><span style="color:var(--text-muted); font-size:11px; font-style:italic;">"${d.evidence.slice(0, 120)}"</span></div>` : ''}
+  `;
+  tooltip.classList.add('visible');
+}
+ 
+function moveTooltip(event) {
+  const x = Math.min(event.clientX + 16, window.innerWidth - 380);
+  const y = Math.min(event.clientY + 16, window.innerHeight - 200);
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+ 
+function hideTooltip() { tooltip.classList.remove('visible'); }
+ 
+// ============================================================
+// INIT — Auto-load CSV from repo, fallback to sample data
+// ============================================================
+const CSV_URL = 'https://raw.githubusercontent.com/STARG-LEE/mab-causal-network-v2/main/step2c_v4d_causal_edges_summary.csv';
+ 
+async function init() {
+  try {
+    const response = await fetch(CSV_URL + '?t=' + Date.now());
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    const parsed = parseCSV(text);
+ 
+    if (parsed.length > 0) {
+      rawData = parsed;
+      document.getElementById('uploadLabel').innerHTML =
+        `✅ Repo CSV Loaded<br><small style="color:var(--text-muted)">${rawData.length} edges (upload another CSV to replace)</small>`;
+    } else {
+      throw new Error('No parsed results');
+    }
+  } catch (e) {
+    console.log('Repo CSV load failed, using sample data:', e.message);
+    rawData = [...SAMPLE_DATA];
+    document.getElementById('uploadLabel').innerHTML =
+      `📊 Using Sample Data<br><small style="color:var(--text-muted)">Upload a CSV to replace</small>`;
+  }
+ 
+  // Update slider range
+  const maxF = Math.max(...rawData.map(d => d.frequency), 20);
+  const maxP = Math.max(...rawData.map(d => d.num_papers), 20);
+  document.getElementById('freqSlider').max = maxF;
+  document.getElementById('paperSlider').max = maxP;
+  document.getElementById('freqSlider').value = minFreq;
+  document.getElementById('paperSlider').value = minPapers;
+  document.getElementById('freqValue').textContent = `≥ ${minFreq}`;
+  document.getElementById('paperValue').textContent = `≥ ${minPapers}`;
+ 
+  buildRelFilters();
+  updateGraph();
+}
+ 
+init();
+</script>
+</body>
+</html>
+
